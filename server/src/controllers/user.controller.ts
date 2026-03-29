@@ -22,14 +22,22 @@ export const getProfile = async (
       include: {
         _count: {
           select: {
-            bookings: {
-              where: { status: 'PAID' }
-            }
+            bookings: { where: { status: 'PAID' } }
           }
         },
         bookings: {
           where: { status: 'PAID' },
           select: { total_amount: true }
+        },
+        loyalty_logs: {
+          orderBy: { created_at: 'desc' },
+          take: 5,
+          select: {
+            points: true,
+            type: true,
+            description: true,
+            created_at: true,
+          }
         }
       }
     });
@@ -39,18 +47,35 @@ export const getProfile = async (
       return;
     }
 
-    // Tính tổng tiền đã chi
+    // ✅ Lấy điểm THẬT từ DB (không tính lại)
+    const realPoints = user.loyalty_points;
+    const realTier   = (user as any).loyalty_tier;
+
+    // Tính tier info
+    const TIERS = [
+      { name: 'Đồng',      min: 0,     max: 999,   color: '#CD7F32', icon: '🥉', multiplier: 1.0 },
+      { name: 'Bạc',       min: 1000,  max: 4999,  color: '#C0C0C0', icon: '🥈', multiplier: 1.2 },
+      { name: 'Vàng',      min: 5000,  max: 9999,  color: '#FFD700', icon: '🥇', multiplier: 1.5 },
+      { name: 'Kim cương', min: 10000, max: Infinity, color: '#B9F2FF', icon: '💎', multiplier: 2.0 },
+    ];
+
+    const currentTier = TIERS.find(t =>
+      realPoints >= t.min && realPoints <= t.max
+    ) ?? TIERS[0];
+
+    const currentIdx  = TIERS.indexOf(currentTier);
+    const nextTier    = TIERS[currentIdx + 1] ?? null;
+
+    const progress = nextTier
+      ? Math.floor(
+          ((realPoints - currentTier.min) /
+          (nextTier.min - currentTier.min)) * 100
+        )
+      : 100;
+
     const totalSpent = user.bookings.reduce(
       (sum, b) => sum + Number(b.total_amount), 0
     );
-
-    // Tính tier và progress
-    const tierInfo    = getTier(user.loyalty_points);
-    const nextTier    = getNextTier(user.loyalty_points);
-    const progress    = getProgressToNextTier(user.loyalty_points);
-    const pointsToNext = nextTier
-      ? nextTier.minPoints - user.loyalty_points
-      : 0;
 
     res.status(200).json({
       success: true,
@@ -60,38 +85,57 @@ export const getProfile = async (
         email:         user.email,
         phone:         user.phone,
         avatar_url:    user.avatar_url,
-        loyalty_points: user.loyalty_points,
-        loyalty_tier:  (user as any).loyalty_tier,
-        is_verified:   user.is_verified,
+        birthday:      user.date_of_birth,
         created_at:    user.created_at,
-        // Thống kê thật từ DB
-        stats: {
-          total_bookings:  user._count.bookings,
-          total_spent:     totalSpent,
-          loyalty_points:  user.loyalty_points,
-        },
-        // Loyalty info
+
+        // ✅ Điểm và hạng THẬT từ DB
+        loyalty_points: realPoints,
+        loyalty_tier:   realTier,
+
         tier_info: {
-          name:        tierInfo.name,
-          color:       tierInfo.color,
-          icon:        tierInfo.icon,
-          perks:       tierInfo.perks,
-          multiplier:  tierInfo.multiplier,
+          name:        currentTier.name,
+          color:       currentTier.color,
+          icon:        currentTier.icon,
+          multiplier:  currentTier.multiplier,
+          perks:       getPerksByTier(currentTier.name),
         },
-        next_tier:           nextTier ? {
+        next_tier: nextTier ? {
           name:      nextTier.name,
-          minPoints: nextTier.minPoints,
+          minPoints: nextTier.min,
           color:     nextTier.color,
           icon:      nextTier.icon,
         } : null,
+
         progress_to_next:    progress,
-        points_to_next_tier: pointsToNext,
+        points_to_next_tier: nextTier
+          ? nextTier.min - realPoints
+          : 0,
+
+        // Thống kê thật
+        stats: {
+          total_bookings: user._count.bookings,
+          total_spent:    totalSpent,
+          loyalty_points: realPoints,
+        },
+
+        // Lịch sử điểm gần nhất
+        recent_logs: user.loyalty_logs,
       }
     });
   } catch (error) {
     next(error);
   }
 };
+
+function getPerksByTier(tier: string): string[] {
+  const perks: Record<string, string[]> = {
+    'Đồng':      ['Tích 1 điểm / 10.000đ', 'Ưu đãi sinh nhật 10%'],
+    'Bạc':       ['Tích 1.2 điểm / 10.000đ', 'Ưu đãi sinh nhật 15%', 'Ưu tiên chọn ghế sớm'],
+    'Vàng':      ['Tích 1.5 điểm / 10.000đ', 'Ưu đãi sinh nhật 20%', 'Miễn phí 1 bắp/tháng'],
+    'Kim cương': ['Tích 2 điểm / 10.000đ', 'Ưu đãi sinh nhật 30%', 'Miễn phí 2 bắp/tháng'],
+  };
+  return perks[tier] ?? perks['Đồng'];
+}
 
 export const updateProfile = async (req: Request, res: Response) => {
   try {
@@ -206,6 +250,7 @@ export const getBirthdayStatus = async (
         success: true,
         data: {
           has_birthday: false,
+          is_birthday_today: false,
           message: 'Chưa cập nhật ngày sinh nhật',
         }
       });
@@ -220,6 +265,7 @@ export const getBirthdayStatus = async (
       success: true,
       data: {
         has_birthday:        true,
+        birthday:            user.date_of_birth,
         is_birthday_today:   isToday,
         discount_percent:    discount,
         days_until_birthday: daysUntil,

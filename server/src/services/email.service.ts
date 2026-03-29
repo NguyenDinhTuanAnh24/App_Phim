@@ -159,4 +159,46 @@ export const sendBookingConfirmation = async (booking: any) => {
     throw error;
   }
 };
+export const sendBirthdayEmail = async (user: any) => {
+  try {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Chúc mừng sinh nhật, ${user.name}! 🎂</title>
+      </head>
+      <body style="font-family: Arial, sans-serif; margin: 0; padding: 0; background-color: #121212; color: #FFFFFF; text-align: center;">
+        <div style="background-color: #c00; padding: 30px;">
+          <h1 style="margin: 0; color: #fff;">🎂 CHÚC MỪNG SINH NHẬT</h1>
+        </div>
+        <div style="padding: 40px; background-color: #1a1a1a; margin: 20px; border-radius: 12px;">
+          <h2 style="color: #fff;">Chào ${user.name},</h2>
+          <p style="font-size: 16px; line-height: 1.6;">Thay mặt đội ngũ <strong>App Phim</strong>, chúc bạn một ngày sinh nhật thật ý nghĩa và tràn đầy niềm vui!</p>
+          <div style="margin: 30px 0; padding: 20px; background-color: #2a2a2a; border-radius: 8px; border: 1px dashed #c00;">
+            <p style="font-size: 18px; color: #F59E0B; margin: 0;">🎁 Quà tặng cho bạn:</p>
+            <p style="font-size: 24px; font-weight: bold; margin: 10px 0;">+100 ĐIỂM THÀNH VIÊN</p>
+            <p style="font-size: 14px; color: #888;">Điểm đã được cộng vào tài khoản của bạn.</p>
+          </div>
+          <p style="font-size: 14px; color: #888;">Đừng quên sử dụng ưu đãi giảm giá đặc biệt trong ngày sinh nhật khi đặt vé hôm nay nhé!</p>
+          <a href="#" style="display:inline-block; background-color: #c00; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; margin-top: 20px;">ĐẶT VÉ NGAY</a>
+        </div>
+        <div style="color: #666; font-size: 12px; padding-bottom: 20px;">
+          <p>© 2026 App Phim Official. All rights reserved.</p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    await transporter.sendMail({
+      from: process.env.SMTP_FROM || 'noreply@appphim.com',
+      to: user.email,
+      subject: `🎂 Chúc mừng sinh nhật, ${user.name}! Quà tặng từ App Phim`,
+      html
+    });
+  } catch (error) {
+    console.error('[EMAIL] Birthday email failed:', error);
+  }
+};
+
 export { transporter };

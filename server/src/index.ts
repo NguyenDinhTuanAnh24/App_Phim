@@ -14,6 +14,7 @@ import path from 'path';
 import { AppError } from './utils/AppError';
 import { initSyncIfEmpty } from './jobs/sync-movies.job';
 import { startExpireBookingsJob } from './jobs/expire-bookings.job';
+import './jobs/birthday.job';
 
 dotenv.config();
 

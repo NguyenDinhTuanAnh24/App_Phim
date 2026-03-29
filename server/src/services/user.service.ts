@@ -32,7 +32,7 @@ export const getProfile = async (userId: string) => {
 
   const u = user as any;
   const birthdayInfo = u.date_of_birth ? {
-    date_of_birth:      u.date_of_birth,
+    birthday:           u.date_of_birth,
     is_birthday_today:  isBirthdayToday(u.date_of_birth),
     days_until_birthday: daysUntilBirthday(u.date_of_birth),
     birthday_discount:  getBirthdayDiscount(u.loyalty_tier),
@@ -51,7 +51,7 @@ export const getProfile = async (userId: string) => {
   };
 };
 
-export const updateProfile = async (userId: string, data: { name?: string; phone?: string; date_of_birth?: string }) => {
+export const updateProfile = async (userId: string, data: { name?: string; phone?: string; birthday?: string }) => {
   if (data.phone) {
     const existingPhone = await prisma.user.findFirst({
       where: { phone: data.phone, id: { not: userId } }
@@ -61,14 +61,25 @@ export const updateProfile = async (userId: string, data: { name?: string; phone
     }
   }
 
+  console.log('[UPDATE PROFILE] Received data:', data);
+
+  const updatePayload: any = {
+    ...(data.name && { name: data.name }),
+    ...(data.phone && { phone: data.phone }),
+  };
+
+  if (data.birthday) {
+    const dob = new Date(data.birthday);
+    console.log('[UPDATE PROFILE] Birthday parsed:', dob);
+    updatePayload.date_of_birth = dob;
+  }
+
   const user = await prisma.user.update({
     where: { id: userId },
-    data: {
-      ...(data.name && { name: data.name }),
-      ...(data.phone && { phone: data.phone }),
-      ...(data.date_of_birth && { date_of_birth: new Date(data.date_of_birth) } as any),
-    }
+    data: updatePayload
   });
+
+  console.log('[UPDATE PROFILE] Update successful for user:', user.id);
 
   const { password_hash, refresh_token, ...safeUser } = user;
   return safeUser;

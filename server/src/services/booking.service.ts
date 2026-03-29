@@ -521,49 +521,60 @@ export const confirmPayment = async (data: ConfirmPaymentData) => {
       },
     });
 
-    // 3. Cộng loyalty points
+    // 3. Tích điểm và cập nhật hạng (Loyalty)
     const user = await tx.user.findUnique({
-      where: { id: booking.user_id }
+      where: { id: booking.user_id },
+      select: { loyalty_tier: true, loyalty_points: true }
     });
-    const u = user as any;
-    const currentBooking = await tx.booking.findUnique({
-      where: { id: booking.id },
-      include: { showtime: { include: { movie: true } } }
-    });
-    
-    const points = calculatePoints(
-      booking.total_amount,
-      u?.loyalty_tier ?? 'Đồng'
-    );
 
-    if (points > 0 && u) {
+    // Tính điểm dựa trên hạng
+    const MULTIPLIERS: Record<string, number> = {
+      'Đồng':      1.0,
+      'Bạc':       1.2,
+      'Vàng':      1.5,
+      'Kim cương': 2.0,
+    };
+    const multiplier   = MULTIPLIERS[user?.loyalty_tier ?? 'Đồng'] ?? 1.0;
+    const basePoints   = Math.floor(booking.total_amount / 10000); // 10k per point base
+    const earnedPoints = Math.floor(basePoints * multiplier);
+
+    if (earnedPoints > 0) {
+      // 3.1 Cộng điểm vào User
       const updatedUser = await tx.user.update({
         where: { id: booking.user_id },
         data: {
-          loyalty_points: { increment: points },
-        }
+          loyalty_points: { increment: earnedPoints }
+        },
+        select: { loyalty_points: true }
       });
-      
-      const uu = updatedUser as any;
-      const newTier = getTier(uu.loyalty_points);
-      if (newTier.name !== uu.loyalty_tier) {
+
+      // 3.2 Tự động nâng cấp hạng (Tier Update)
+      const newPoints = updatedUser.loyalty_points;
+      let newTier = 'Đồng';
+      if (newPoints >= 10000)      newTier = 'Kim cương';
+      else if (newPoints >= 5000)  newTier = 'Vàng';
+      else if (newPoints >= 1000)  newTier = 'Bạc';
+
+      if (newTier !== user?.loyalty_tier) {
         await tx.user.update({
           where: { id: booking.user_id },
-          data: { loyalty_tier: newTier.name } as any
+          data: { loyalty_tier: newTier }
         });
+        console.log(`[LOYALTY] User ${booking.user_id} đã lên hạng: ${newTier}`);
       }
 
+      // 3.3 Ghi log lịch sử điểm
       await (tx as any).loyaltyLog.create({
         data: {
-          user_id: booking.user_id,
-          points: points,
-          type: 'EARN',
-          description: `Đặt vé phim ${currentBooking?.showtime?.movie?.title ?? ''}`,
-          booking_id: booking.id,
+          user_id:     booking.user_id,
+          points:      earnedPoints,
+          type:        'EARN',
+          description: `Đặt vé phim - Tích ${earnedPoints} điểm`,
+          booking_id:  booking.id,
         }
       });
 
-      console.log(`[BOOKING] Cộng ${points} loyalty points cho user ${booking.user_id}`);
+      console.log(`[LOYALTY] Cộng ${earnedPoints} điểm cho user: ${booking.user_id}`);
     }
 
     return booking;

@@ -7,7 +7,7 @@ export const updateProfileSchema = z.object({
     .length(10, 'Số điện thoại phải có đúng 10 chữ số')
     .regex(/^0/, 'Số điện thoại phải bắt đầu bằng số 0')
     .optional(),
-  date_of_birth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Định dạng ngày sinh phải là YYYY-MM-DD')
+  birthday: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Định dạng ngày sinh phải là YYYY-MM-DD')
     .refine(val => {
       const d = dayjs(val);
       return d.isValid()
