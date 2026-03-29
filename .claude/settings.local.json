@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx expo:*)",
+      "Bash(ren metro.config.js metro.config.cjs)"
+    ]
+  }
+}

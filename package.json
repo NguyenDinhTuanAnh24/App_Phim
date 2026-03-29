@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^25.5.0",
+    "crypto": "^1.0.1",
+    "dayjs": "^1.11.20",
+    "jsonwebtoken": "^9.0.3",
+    "qrcode": "^1.5.4"
+  }
+}
