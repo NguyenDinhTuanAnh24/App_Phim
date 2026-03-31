@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --cinema-bg: #0a0a0a;
+  --cinema-surface: rgba(255, 255, 255, 0.08);
+  --cinema-surface-strong: rgba(255, 255, 255, 0.12);
+  --cinema-border: rgba(255, 255, 255, 0.2);
+  --cinema-shadow: rgba(0, 0, 0, 0.55);
+  --cinema-accent-start: #b00020;
+  --cinema-accent-end: #e50914;
+}

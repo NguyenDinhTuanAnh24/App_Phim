@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "745494467258",
+    "project_id": "gen-lang-client-0290876184",
+    "storage_bucket": "gen-lang-client-0290876184.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:745494467258:android:99f36e586edd9479a2e883",
+        "android_client_info": {
+          "package_name": "com.movieticket.mobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "745494467258-28ohfqmvaqljp4jkfai3c6g396n5l42k.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.movieticket.mobile",
+            "certificate_hash": "5fb4f112a33cb81599e04114fd1c66985fee0f39"
+          }
+        },
+        {
+          "client_id": "745494467258-6t1k2ln9r75vfpn236arhuobmkr1g0ak.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.movieticket.mobile",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "745494467258-a1uo9i7qtan3pk0cnk7ip4m8apv8otb1.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDyXweoA2BGC65Z-KB7vso0LL2Ca1v6qww"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "745494467258-a1uo9i7qtan3pk0cnk7ip4m8apv8otb1.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
