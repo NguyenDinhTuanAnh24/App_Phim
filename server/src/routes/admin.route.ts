@@ -19,6 +19,8 @@ router.patch('/bookings/:id/status',      adminController.updateBookingStatus);
 
 // Movies
 router.get('/movies',                     adminController.getAdminMovies);
+router.get('/movies/suggestions',         adminController.getAdminMovieSuggestions);
+router.get('/movies/:id',                 adminController.getAdminMovieDetail);
 router.post('/movies',                    adminController.createMovie);
 router.put('/movies/:id',                 adminController.updateMovie);
 router.delete('/movies/:id',              adminController.deleteMovie);
@@ -30,11 +32,13 @@ router.delete('/showtimes/:id',           adminController.deleteShowtime);
 
 // Users
 router.get('/users',                      adminController.getAdminUsers);
+router.get('/users/suggestions',          adminController.getAdminUserSuggestions);
 router.get('/users/:id',                  adminController.getAdminUserDetail);
 router.patch('/users/:id/ban',            adminController.banUser);
 
 // Support
 router.get('/support',                    adminController.getAllTickets);
+router.get('/support/:id',                adminController.getTicketDetail);
 router.patch('/support/:id/reply',        adminController.replyTicket);
 
 export default router;

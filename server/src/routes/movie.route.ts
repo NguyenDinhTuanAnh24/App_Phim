@@ -7,6 +7,7 @@ const router = Router();
 router.get('/now-showing', movieController.getNowShowing);
 router.get('/coming-soon', movieController.getComingSoon);
 router.get('/search', movieController.searchMovies);
+router.get('/suggestions', movieController.getSuggestions);
 router.get('/genres', movieController.getAllGenres);
 
 // Generic routes LAST

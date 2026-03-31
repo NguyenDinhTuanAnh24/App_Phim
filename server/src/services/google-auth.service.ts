@@ -4,6 +4,7 @@ import { generateAccessToken, generateRefreshToken } from '../utils/jwt.util';
 import bcrypt from 'bcryptjs';
 import { AppError } from '../utils/AppError';
 import { sendWelcomeGoogleSignupEmail } from './email.service';
+import { grantBirthdayRewardOnLogin } from './birthday-reward.service';
 
 export const verifyFirebaseToken = async (idToken: string) => {
   if (!isFirebaseEnabled || !firebaseAdmin) {
@@ -81,6 +82,11 @@ export const googleSignIn = async (idToken: string) => {
   }
 
   // 4. Tokens
+  const birthdayReward = await grantBirthdayRewardOnLogin(user.id);
+  const effectivePoints = birthdayReward.granted
+    ? (birthdayReward.currentPoints ?? user.loyalty_points)
+    : user.loyalty_points;
+
   const accessToken = generateAccessToken({ userId: user.id, role: user.role });
   const refreshToken = generateRefreshToken({ userId: user.id });
 
@@ -105,10 +111,13 @@ export const googleSignIn = async (idToken: string) => {
       email: user.email,
       role: user.role,
       avatarUrl: user.avatar_url,
-      loyaltyPoints: user.loyalty_points,
+      loyaltyPoints: effectivePoints,
       authProvider: user.auth_provider,
       isNewUser,
     },
+    birthdayReward: birthdayReward.granted
+      ? { granted: true, points: birthdayReward.pointsGranted }
+      : null,
     message: isNewUser ? 'Đăng ký thành công bằng Google' : 'Đăng nhập thành công',
   };
 };

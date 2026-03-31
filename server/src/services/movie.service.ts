@@ -10,11 +10,22 @@ interface GetMoviesQuery {
   limit?: number;
 }
 
+interface AdvancedSearchFilters {
+  minRating?: number;
+  maxRating?: number;
+  year?: number;
+  status?: 'NOW_SHOWING' | 'COMING_SOON';
+  genre?: string;
+  sortBy?: 'rating' | 'releaseDate' | 'title';
+  sortOrder?: 'asc' | 'desc';
+}
+
 const MOVIE_LIST_SELECT = {
   id: true,
   tmdb_id: true,
   title: true,
   original_title: true,
+  overview: true,
   poster_url: true,
   backdrop_url: true,
   trailer_key: true,
@@ -26,18 +37,46 @@ const MOVIE_LIST_SELECT = {
   language: true,
 };
 
-export const getMovies = async (query: GetMoviesQuery) => {
-  const { status, genre, search, page = 1, limit = 10 } = query;
-
-  const where: any = {};
-
-  if (status) where.status = status;
-
-  if (genre) {
-    // genres is stored as JSON array, use string_contains for MySQL JSON
-    where.genres = { string_contains: genre };
+const mapMovieData = (movie: any) => {
+  let parsedGenres = [];
+  try {
+    parsedGenres = Array.isArray(movie.genres) 
+      ? movie.genres 
+      : typeof movie.genres === 'string' 
+        ? JSON.parse(movie.genres) 
+        : [];
+  } catch (e) {
+    // Nếu không phải JSON, thử split theo dấu phẩy
+    parsedGenres = typeof movie.genres === 'string' 
+      ? movie.genres.split(',').map((g: string) => g.trim()) 
+      : [];
   }
 
+  return {
+    id: movie.id,
+    tmdbId: movie.tmdb_id,
+    title: movie.title,
+    originalTitle: movie.original_title,
+    overview: movie.overview,
+    posterUrl: movie.poster_url,
+    backdropUrl: movie.backdrop_url,
+    trailerKey: movie.trailer_key,
+    rating: movie.rating,
+    duration: movie.duration,
+    genres: parsedGenres,
+    status: movie.status,
+    releaseDate: movie.release_date,
+    language: movie.language,
+  };
+};
+
+export const getMovies = async (query: GetMoviesQuery) => {
+  const { status, genre, search, page = 1, limit = 10 } = query;
+  const where: any = {};
+  if (status) where.status = status;
+  if (genre) {
+    where.genres = { contains: genre };
+  }
   if (search) {
     where.OR = [
       { title: { contains: search } },
@@ -56,34 +95,15 @@ export const getMovies = async (query: GetMoviesQuery) => {
     prisma.movie.count({ where }),
   ]);
 
-  const totalPages = Math.ceil(total / limit);
-
   return {
-    movies,
+    movies: movies.map(mapMovieData),
     pagination: {
       page,
       limit,
       total,
-      totalPages,
-      hasNext: page < totalPages,
-      hasPrev: page > 1,
+      totalPages: Math.ceil(total / limit),
     },
   };
-};
-
-export const getMovieById = async (id: string) => {
-  // Check cache
-  const cacheKey = `movie:${id}`;
-  const cached = await redisClient.get(cacheKey);
-  if (cached) return JSON.parse(cached);
-
-  const movie = await prisma.movie.findUnique({ where: { id } });
-  if (!movie) throw new AppError('Phim không tồn tại', 404);
-
-  // Cache for 30 minutes
-  await redisClient.setEx(cacheKey, 1800, JSON.stringify(movie));
-
-  return movie;
 };
 
 export const getNowShowingMovies = async () => {
@@ -98,8 +118,9 @@ export const getNowShowingMovies = async () => {
     select: MOVIE_LIST_SELECT,
   });
 
-  await redisClient.setEx(cacheKey, 1800, JSON.stringify(movies));
-  return movies;
+  const result = movies.map(mapMovieData);
+  await redisClient.setEx(cacheKey, 1800, JSON.stringify(result));
+  return result;
 };
 
 export const getComingSoonMovies = async () => {
@@ -114,43 +135,105 @@ export const getComingSoonMovies = async () => {
     select: MOVIE_LIST_SELECT,
   });
 
-  await redisClient.setEx(cacheKey, 3600, JSON.stringify(movies));
-  return movies;
+  const result = movies.map(mapMovieData);
+  await redisClient.setEx(cacheKey, 3600, JSON.stringify(result));
+  return result;
 };
 
-export const searchMovies = async (query: string) => {
+export const getMovieById = async (id: string) => {
+  const movie = await prisma.movie.findUnique({ where: { id } });
+  if (!movie) throw new AppError('Phim không tồn tại', 404);
+  return mapMovieData(movie);
+};
+
+export const searchMoviesAdvanced = async (query: string, filters: AdvancedSearchFilters) => {
+  const lowerQuery = query.toLowerCase();
+  const where: any = {};
+
+  if (query && query.length >= 2) {
+    where.OR = [
+      { title: { contains: query } },
+      { original_title: { contains: query } },
+      { genres: { contains: query } },
+    ];
+  }
+
+  if (filters.minRating !== undefined) where.rating = { gte: filters.minRating };
+  if (filters.maxRating !== undefined) where.rating = { ...where.rating, lte: filters.maxRating };
+  if (filters.status) where.status = filters.status;
+  if (filters.genre) where.genres = { contains: filters.genre };
+  if (filters.year) {
+    where.release_date = {
+      gte: new Date(filters.year, 0, 1),
+      lte: new Date(filters.year, 11, 31),
+    };
+  }
+
+  const movies = await prisma.movie.findMany({ where, take: 50, select: MOVIE_LIST_SELECT });
+  const ranked = movies.map(m => {
+    let score = 0;
+    const title = m.title.toLowerCase();
+    if (title === lowerQuery) score += 100;
+    else if (title.startsWith(lowerQuery)) score += 50;
+    else if (title.includes(lowerQuery)) score += 20;
+    return { ...m, score };
+  });
+
+  ranked.sort((a, b) => b.score - a.score || b.rating - a.rating);
+  return {
+    movies: ranked.slice(0, 20).map(mapMovieData),
+    total: ranked.length
+  };
+};
+
+export const getMovieSuggestions = async (query: string) => {
+  const lowerQuery = query.toLowerCase();
   const movies = await prisma.movie.findMany({
     where: {
       OR: [
         { title: { contains: query } },
         { original_title: { contains: query } },
+        { genres: { contains: query } },
       ],
     },
-    take: 20,
+    take: 10,
     select: MOVIE_LIST_SELECT,
   });
-  return movies;
+
+  const ranked = movies.map(m => {
+    let score = 0;
+    const title = m.title.toLowerCase();
+    if (title === lowerQuery) score += 100;
+    else if (title.startsWith(lowerQuery)) score += 50;
+    return { ...m, score };
+  });
+
+  ranked.sort((a, b) => b.score - a.score || b.rating - a.rating);
+  return ranked.slice(0, 5).map(mapMovieData);
 };
 
 export const getAllGenres = async () => {
-  const cacheKey = 'genres:all';
-  const cached = await redisClient.get(cacheKey);
-  if (cached) return JSON.parse(cached);
-
   const movies = await prisma.movie.findMany({ select: { genres: true } });
   const genresSet = new Set<string>();
-
-  movies.forEach((m) => {
-    const parsed = Array.isArray(m.genres)
-      ? m.genres
-      : typeof m.genres === 'string'
-      ? JSON.parse(m.genres)
-      : [];
-    parsed.forEach((g: string) => genresSet.add(g));
+  
+  movies.forEach(m => {
+    let genres: string[] = [];
+    try {
+      genres = Array.isArray(m.genres) 
+        ? m.genres 
+        : typeof m.genres === 'string' 
+          ? JSON.parse(m.genres) 
+          : [];
+    } catch (e) {
+      if (typeof m.genres === 'string') {
+        genres = m.genres.split(',').map((g: string) => g.trim());
+      }
+    }
+    
+    genres.forEach((g: string) => {
+      if (g) genresSet.add(g);
+    });
   });
-
-  const genres = Array.from(genresSet).sort();
-
-  await redisClient.setEx(cacheKey, 3600, JSON.stringify(genres));
-  return genres;
+  
+  return Array.from(genresSet).sort();
 };

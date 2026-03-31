@@ -24,7 +24,7 @@ export const getDashboardStats = async () => {
         _sum: { total_amount: true },
         _count: { id: true },
       }),
-      prisma.user.count(),
+      prisma.user.count({ where: { role: 'USER' } }),
       prisma.movie.count({ where: { status: 'NOW_SHOWING' } }),
     ])
   ]);
@@ -34,24 +34,23 @@ export const getDashboardStats = async () => {
   const todayBookings = todayStats._count.id || 0;
   const yesterdayBookings = yesterdayStats._count.id || 0;
 
-  // Calculate growth
-  const revenueGrowth = yesterdayRevenue === 0 ? (todayRevenue > 0 ? 100 : 0) : ((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100;
-  const bookingsGrowth = yesterdayBookings === 0 ? (todayBookings > 0 ? 100 : 0) : ((todayBookings - yesterdayBookings) / yesterdayBookings) * 100;
+  // Growth phản ánh thực tế: nếu hôm qua bằng 0 thì không ép 100%
+  const revenueGrowth = yesterdayRevenue > 0
+    ? ((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100
+    : 0;
+  const bookingsGrowth = yesterdayBookings > 0
+    ? ((todayBookings - yesterdayBookings) / yesterdayBookings) * 100
+    : 0;
 
   // For tickets sold today, we need to sum up booking items
   const ticketsSoldToday = await prisma.bookingItem.count({
     where: { booking: { status: 'PAID', paid_at: { gte: today } } }
   });
 
-  const newUserToday = await prisma.user.count({
-    where: { created_at: { gte: today } }
-  });
-
   return {
     today: {
       revenue: todayRevenue,
       bookings: todayBookings,
-      new_users: newUserToday,
       tickets_sold: ticketsSoldToday,
     },
     total: {
@@ -239,14 +238,89 @@ export const getAdminMovies = async (query: { search?: string, page?: number, li
     };
 };
 
+export const getAdminMovieSuggestions = async (query: string) => {
+    const keyword = query.trim();
+    if (!keyword) return [];
+
+    return prisma.movie.findMany({
+        where: {
+            OR: [
+                { title: { contains: keyword } },
+                { original_title: { contains: keyword } },
+            ],
+        },
+        select: {
+            id: true,
+            title: true,
+            original_title: true,
+            status: true,
+            release_date: true,
+        },
+        orderBy: { release_date: 'desc' },
+        take: 8,
+    });
+};
+
+export const getAdminMovieDetail = async (id: string) => {
+    const movie = await prisma.movie.findUnique({
+        where: { id }
+    });
+
+    if (!movie) {
+        throw new AppError('Không tìm thấy phim', 404);
+    }
+
+    return movie;
+};
+
 export const createMovie = async (data: any) => {
-    return prisma.movie.create({ data });
+    if (!data?.title?.trim()) {
+        throw new AppError('Tiêu đề phim là bắt buộc', 400);
+    }
+
+    const now = Date.now();
+    const normalizedData = {
+        tmdb_id: Number(data.tmdb_id ?? now),
+        title: data.title.trim(),
+        original_title: data.original_title?.trim() || data.title.trim(),
+        overview: data.overview?.trim() || 'Đang cập nhật nội dung phim.',
+        poster_url: data.poster_url || 'https://via.placeholder.com/500x750?text=Movie',
+        backdrop_url: data.backdrop_url || 'https://via.placeholder.com/1280x720?text=Backdrop',
+        trailer_key: data.trailer_key || null,
+        genres: typeof data.genres === 'string' ? data.genres : JSON.stringify(data.genres || []),
+        cast: typeof data.cast === 'string' ? data.cast : JSON.stringify(data.cast || []),
+        director: data.director || 'Đang cập nhật',
+        duration: Number(data.duration ?? 120),
+        rating: Number(data.rating ?? 8),
+        language: data.language || 'vi',
+        status: data.status || 'COMING_SOON',
+        release_date: data.release_date ? new Date(data.release_date) : new Date(),
+    };
+
+    return prisma.movie.create({ data: normalizedData });
 };
 
 export const updateMovie = async (id: string, data: any) => {
+    const mappedData: any = {
+        ...(data.title ? { title: data.title.trim() } : {}),
+        ...(data.original_title ? { original_title: data.original_title.trim() } : {}),
+        ...(data.overview ? { overview: data.overview.trim() } : {}),
+        ...(data.poster_url ? { poster_url: data.poster_url } : {}),
+        ...(data.backdrop_url ? { backdrop_url: data.backdrop_url } : {}),
+        ...(data.trailer_key !== undefined ? { trailer_key: data.trailer_key } : {}),
+        ...(data.genres ? { genres: typeof data.genres === 'string' ? data.genres : JSON.stringify(data.genres) } : {}),
+        ...(data.cast ? { cast: typeof data.cast === 'string' ? data.cast : JSON.stringify(data.cast) } : {}),
+        ...(data.director ? { director: data.director } : {}),
+        ...(data.duration !== undefined ? { duration: Number(data.duration) } : {}),
+        ...(data.rating !== undefined ? { rating: Number(data.rating) } : {}),
+        ...(data.language ? { language: data.language } : {}),
+        ...(data.status ? { status: data.status } : {}),
+        ...(data.release_date ? { release_date: new Date(data.release_date) } : {}),
+    };
+
     return prisma.movie.update({
         where: { id },
-        data
+        data: mappedData
     });
 };
 
@@ -260,13 +334,40 @@ export const deleteMovie = async (id: string) => {
 };
 
 export const createShowtime = async (data: any) => {
-    return prisma.showtime.create({ data });
+    const startTime = data.start_time || data.startTime;
+    if (!startTime) throw new AppError('Thiếu thời gian bắt đầu suất chiếu', 400);
+
+    const normalizedData = {
+        movie_id: data.movie_id || data.movieId,
+        room_id: data.room_id || data.roomId,
+        start_time: new Date(startTime),
+        end_time: new Date(data.end_time || data.endTime || new Date(new Date(startTime).getTime() + 2 * 60 * 60 * 1000)),
+        price: Number(data.price ?? 90000),
+        vip_price: Number(data.vip_price ?? data.vipPrice ?? 120000),
+        couple_price: Number(data.couple_price ?? data.couplePrice ?? 180000),
+        language: data.language || 'Phụ đề Việt',
+        format: data.format || '2D',
+    };
+
+    return prisma.showtime.create({ data: normalizedData });
 };
 
 export const updateShowtime = async (id: string, data: any) => {
+    const mappedData: any = {
+        ...(data.movie_id || data.movieId ? { movie_id: data.movie_id || data.movieId } : {}),
+        ...(data.room_id || data.roomId ? { room_id: data.room_id || data.roomId } : {}),
+        ...(data.start_time || data.startTime ? { start_time: new Date(data.start_time || data.startTime) } : {}),
+        ...(data.end_time || data.endTime ? { end_time: new Date(data.end_time || data.endTime) } : {}),
+        ...(data.price !== undefined ? { price: Number(data.price) } : {}),
+        ...(data.vip_price !== undefined || data.vipPrice !== undefined ? { vip_price: Number(data.vip_price ?? data.vipPrice) } : {}),
+        ...(data.couple_price !== undefined || data.couplePrice !== undefined ? { couple_price: Number(data.couple_price ?? data.couplePrice) } : {}),
+        ...(data.language ? { language: data.language } : {}),
+        ...(data.format ? { format: data.format } : {}),
+    };
+
     return prisma.showtime.update({
         where: { id },
-        data
+        data: mappedData
     });
 };
 
@@ -327,6 +428,30 @@ export const getAdminUsers = async (query: { search?: string, page?: number, lim
             totalPages: Math.ceil(total / limit)
         }
     };
+};
+
+export const getAdminUserSuggestions = async (query: string) => {
+    const keyword = query.trim();
+    if (!keyword) return [];
+
+    const users = await prisma.user.findMany({
+        where: {
+            role: 'USER',
+            OR: [
+                { name: { contains: keyword } },
+                { email: { contains: keyword } },
+            ],
+        },
+        select: {
+            id: true,
+            name: true,
+            email: true,
+        },
+        orderBy: { created_at: 'desc' },
+        take: 8,
+    });
+
+    return users;
 };
 
 export const getAdminUserDetail = async (id: string) => {
@@ -398,6 +523,21 @@ export const getAllTickets = async (query: { status?: string, page?: number, lim
             totalPages: Math.ceil(total / limit)
         }
     };
+};
+
+export const getTicketDetail = async (ticketId: string) => {
+    const ticket = await prisma.supportTicket.findUnique({
+        where: { id: ticketId },
+        include: {
+            user: { select: { name: true, email: true, avatar_url: true } }
+        }
+    });
+
+    if (!ticket) {
+        throw new AppError('Không tìm thấy ticket hỗ trợ', 404);
+    }
+
+    return ticket;
 };
 
 export const replyTicket = async (ticketId: string, reply: string, adminId: string) => {

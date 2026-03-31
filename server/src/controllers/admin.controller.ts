@@ -41,6 +41,17 @@ export const getAdminMovies = asyncHandler(async (req: Request, res: Response) =
     res.json({ success: true, ...movies });
 });
 
+export const getAdminMovieSuggestions = asyncHandler(async (req: Request, res: Response) => {
+    const q = (req.query.q as string) || '';
+    const suggestions = await adminService.getAdminMovieSuggestions(q);
+    res.json({ success: true, data: suggestions });
+});
+
+export const getAdminMovieDetail = asyncHandler(async (req: Request, res: Response) => {
+    const movie = await adminService.getAdminMovieDetail(req.params.id as string);
+    res.json({ success: true, data: movie });
+});
+
 export const createMovie = asyncHandler(async (req: Request, res: Response) => {
     const movie = await adminService.createMovie(req.body);
     res.json({ success: true, data: movie });
@@ -76,6 +87,12 @@ export const getAdminUsers = asyncHandler(async (req: Request, res: Response) =>
     res.json({ success: true, ...users });
 });
 
+export const getAdminUserSuggestions = asyncHandler(async (req: Request, res: Response) => {
+    const q = (req.query.q as string) || '';
+    const suggestions = await adminService.getAdminUserSuggestions(q);
+    res.json({ success: true, data: suggestions });
+});
+
 export const getAdminUserDetail = asyncHandler(async (req: Request, res: Response) => {
     const user = await adminService.getAdminUserDetail(req.params.id as string);
     res.json({ success: true, data: user });
@@ -89,6 +106,11 @@ export const banUser = asyncHandler(async (req: Request, res: Response) => {
 export const getAllTickets = asyncHandler(async (req: Request, res: Response) => {
     const tickets = await adminService.getAllTickets(req.query as any);
     res.json({ success: true, ...tickets });
+});
+
+export const getTicketDetail = asyncHandler(async (req: Request, res: Response) => {
+    const ticket = await adminService.getTicketDetail(req.params.id as string);
+    res.json({ success: true, data: ticket });
 });
 
 export const replyTicket = asyncHandler(async (req: Request, res: Response) => {

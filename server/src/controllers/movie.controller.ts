@@ -35,15 +35,38 @@ export const getComingSoon = asyncHandler(async (req: Request, res: Response) =>
 
 export const searchMovies = asyncHandler(async (req: Request, res: Response) => {
   const q = (req.query.q as string) || '';
+  const { minRating, maxRating, year, status, genre, sortBy, sortOrder } = req.query;
+  
   if (!q) {
-    res.json({ success: true, data: [] });
+    res.json({ success: true, data: { movies: [], total: 0, appliedFilters: {} } });
     return;
   }
-  const movies = await movieService.searchMovies(q);
-  res.json({ success: true, data: movies });
+
+  const filters = {
+    minRating: minRating ? parseFloat(minRating as string) : undefined,
+    maxRating: maxRating ? parseFloat(maxRating as string) : undefined,
+    year: year ? parseInt(year as string) : undefined,
+    status: status as 'NOW_SHOWING' | 'COMING_SOON' | undefined,
+    genre: genre as string | undefined,
+    sortBy: sortBy as 'rating' | 'releaseDate' | 'title' | undefined,
+    sortOrder: sortOrder as 'asc' | 'desc' | undefined,
+  };
+
+  const result = await movieService.searchMoviesAdvanced(q, filters);
+  res.json({ success: true, data: result });
 });
 
 export const getAllGenres = asyncHandler(async (req: Request, res: Response) => {
   const genres = await movieService.getAllGenres();
   res.json({ success: true, data: genres });
+});
+
+export const getSuggestions = asyncHandler(async (req: Request, res: Response) => {
+  const q = (req.query.q as string) || '';
+  if (!q || q.length < 2) {
+    res.json({ success: true, data: [] });
+    return;
+  }
+  const suggestions = await movieService.getMovieSuggestions(q);
+  res.json({ success: true, data: suggestions });
 });

@@ -7,7 +7,7 @@ export const authRateLimit = rateLimit({
 });
 
 export const otpRateLimit = rateLimit({
-  windowMs: 10 * 60 * 1000,
-  max: 3,
-  message: { success: false, message: 'Đã gửi quá nhiều OTP, vui lòng thử lại sau 10 phút' }
+  windowMs: 10 * 1000,
+  max: 5,
+  message: { success: false, message: 'Thao tác quá nhanh, vui lòng thử lại sau 10 giây' }
 });

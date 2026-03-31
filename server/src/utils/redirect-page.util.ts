@@ -26,6 +26,8 @@ export function buildRedirectPage(params: RedirectPageParams): string {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${message}</title>
+  <!-- Tự động đánh thức app sau 1s nếu thanh toán thành công -->
+  ${success ? `<meta http-equiv="refresh" content="1;url=${deepLink}">` : ''}
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -43,14 +45,22 @@ export function buildRedirectPage(params: RedirectPageParams): string {
     .container {
       text-align: center;
       padding: 40px 24px;
-      max-width: 360px;
+      max-width: 380px;
       width: 100%;
     }
 
-    .icon {
-      font-size: 72px;
-      margin-bottom: 24px;
-      display: block;
+    .icon-box {
+      width: 80px;
+      height: 80px;
+      background: ${color}22;
+      border: 2px solid ${color};
+      color: ${color};
+      font-size: 40px;
+      border-radius: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 24px;
     }
 
     .title {
@@ -64,19 +74,15 @@ export function buildRedirectPage(params: RedirectPageParams): string {
       font-size: 14px;
       color: #9CA3AF;
       margin-bottom: 40px;
+      line-height: 1.6;
     }
 
     .countdown-box {
       background: #1A1A1A;
       border-radius: 16px;
       padding: 24px;
-      margin-bottom: 24px;
-    }
-
-    .countdown-label {
-      font-size: 13px;
-      color: #6B7280;
-      margin-bottom: 12px;
+      margin-bottom: 32px;
+      border: 1px solid #333;
     }
 
     .countdown-number {
@@ -85,21 +91,6 @@ export function buildRedirectPage(params: RedirectPageParams): string {
       color: ${color};
       line-height: 1;
       margin-bottom: 12px;
-    }
-
-    .progress-bar {
-      height: 4px;
-      background: #2A2A2A;
-      border-radius: 2px;
-      overflow: hidden;
-    }
-
-    .progress-fill {
-      height: 100%;
-      background: ${color};
-      border-radius: 2px;
-      width: 100%;
-      transition: width 1s linear;
     }
 
     .open-btn {
@@ -111,105 +102,107 @@ export function buildRedirectPage(params: RedirectPageParams): string {
       border-radius: 12px;
       font-size: 16px;
       font-weight: 600;
-      margin-bottom: 12px;
+      margin-bottom: 16px;
+      cursor: pointer;
+      border: none;
+      width: 100%;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    }
+
+    .open-btn:active {
+      transform: scale(0.98);
+      opacity: 0.9;
+    }
+
+    .close-btn {
+      display: block;
+      background: #374151;
+      color: #FFFFFF;
+      text-decoration: none;
+      padding: 12px 32px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 16px;
       cursor: pointer;
       border: none;
       width: 100%;
     }
 
-    .open-btn:active {
-      opacity: 0.8;
+    .close-btn:active {
+      transform: scale(0.98);
+      opacity: 0.9;
     }
 
     .hint {
-      font-size: 12px;
-      color: #4B5563;
+      font-size: 13px;
+      color: #6B7280;
       line-height: 1.5;
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <span class="icon">${icon}</span>
+    <div class="icon-box">${icon}</div>
     <div class="title">${message}</div>
     <div class="subtitle">${subMessage}</div>
 
     <div class="countdown-box">
-      <div class="countdown-label">Tự động mở App Phim sau</div>
+      <div style="font-size: 13px; color: #888; margin-bottom: 12px;">Đang quay lại app sau...</div>
       <div class="countdown-number" id="count">${countdown}</div>
-      <div class="progress-bar">
-        <div class="progress-fill" id="progress"></div>
-      </div>
     </div>
 
-    <button onclick="openApp()" class="open-btn">
-      Mở App Phim ngay
+    <button type="button" onclick="openApp()" class="open-btn">
+      TIẾP TỤC TRÊN APP
     </button>
 
     <div class="hint">
-      Nếu app không tự mở, hãy bấm nút bên trên<br>
-      hoặc quay lại app và kiểm tra vé của bạn
+      ${success 
+        ? 'Thanh toán thành công! Vui lòng đóng cửa sổ này để quay về ứng dụng.'
+        : 'Đã xảy ra lỗi. Vui lòng đóng cửa sổ và thử lại.'
+      }
     </div>
   </div>
 
   <script>
-    const deepLink   = '${deepLink}';
-    const total      = ${countdown};
-    let   remaining  = total;
-
-    const countEl    = document.getElementById('count');
-    const progressEl = document.getElementById('progress');
-
-    // Tạo Android Intent URL
-    function getIntentUrl(url) {
-      const withoutScheme = url.replace('movieticket://', '');
-      return 'intent://' + withoutScheme +
-        '#Intent;scheme=movieticket;' +
-        'package=com.movieticket.mobile;' +
-        'S.browser_fallback_url=about:blank;end';
-    }
+    const deepLink = '${deepLink}';
+    let countdown = ${countdown};
 
     function openApp() {
-      const isAndroid = /Android/i.test(navigator.userAgent);
-
-      if (isAndroid) {
-        // Android: dùng Intent URL
-        window.location.href = getIntentUrl(deepLink);
-      } else {
-        // iOS: dùng scheme thường
-        window.location.href = deepLink;
-      }
+      // Thử mở app bằng Deep Link
+      window.location.href = deepLink;
     }
 
-    // Cập nhật progress bar
-    function updateProgress() {
-      const pct = (remaining / total) * 100;
-      progressEl.style.width = pct + '%';
+    function closeWindow() {
+      if (window.close) window.close();
+      window.location.href = 'about:blank';
     }
 
-    // Thử mở deep link ngay lập tức
-    setTimeout(openApp, 500);
-    updateProgress();
-
-    // Đếm ngược mỗi giây
+    // Bộ đếm ngược tự động đóng
     const timer = setInterval(() => {
-      remaining--;
-      countEl.textContent = remaining;
-      updateProgress();
-
-      if (remaining <= 0) {
+      countdown--;
+      document.getElementById('count').textContent = countdown;
+      
+      if (countdown <= 0) {
         clearInterval(timer);
-        // Thử mở lại lần cuối
-        openApp();
+        closeWindow();
       }
     }, 1000);
 
-    // Nếu app đã mở (page bị blur) → dừng đếm
+    // Dừng đếm nếu window bị ẩn (user đã chuyển tab)
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        clearInterval(timer);
-      }
+      if (document.hidden) clearInterval(timer);
     });
+
+    // Tự động đóng khi tải xong (sau 1s)
+    window.onload = function() {
+      setTimeout(() => {
+        // Chỉ auto close nếu là success
+        if (${success}) {
+          closeWindow();
+        }
+      }, 1000);
+    };
   </script>
 </body>
 </html>

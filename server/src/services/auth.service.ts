@@ -5,9 +5,12 @@ import { generateOTP, hashOTP, verifyOTP } from '../utils/otp.util';
 import { sendOTPEmail, sendResetPasswordEmail } from '../utils/email.util';
 import redisClient from '../utils/redis.util';
 import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../utils/jwt.util';
-import { verifyGoogleToken } from '../utils/firebase.util';
+import { verifyFirebaseToken } from './google-auth.service';
+import { grantBirthdayRewardOnLogin } from './birthday-reward.service';
 
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS || '12');
+const OTP_EXPIRES_SECONDS = parseInt(process.env.OTP_EXPIRES_MINUTES || '5') * 60;
+const OTP_RESEND_COOLDOWN_SECONDS = 10;
 
 export const register = async (data: any) => {
   // Kiểm tra email - Tận dụng tính không phân biệt hoa thường mặc định của MySQL
@@ -63,17 +66,19 @@ export const sendOtp = async (email: string) => {
   if (!user) throw new AppError("Email không tồn tại", 404);
 
   const otpKey = `otp:${email}`;
-  const existingOtpCache = await redisClient.get(otpKey);
+  const otpResendKey = `otp:resend:${email}`;
+  const existingOtpCache = await redisClient.get(otpResendKey);
   
   if (existingOtpCache) {
-    const ttl = await redisClient.ttl(otpKey);
-    throw new AppError(`Vui lòng chờ ${ttl} giây trước khi gửi lại`, 400);
+    const ttl = await redisClient.ttl(otpResendKey);
+    return { message: `Mã OTP đã được gửi trước đó. Vui lòng chờ ${ttl} giây để gửi lại` };
   }
 
   const otp = generateOTP();
   const hashedOtp = await hashOTP(otp);
 
-  await redisClient.setEx(otpKey, parseInt(process.env.OTP_EXPIRES_MINUTES || '5') * 60, JSON.stringify({ hash: hashedOtp, attempts: 0 }));
+  await redisClient.setEx(otpKey, OTP_EXPIRES_SECONDS, JSON.stringify({ hash: hashedOtp, attempts: 0 }));
+  await redisClient.setEx(otpResendKey, OTP_RESEND_COOLDOWN_SECONDS, '1');
 
   await sendOTPEmail(email, otp, user.name);
 
@@ -138,6 +143,11 @@ export const login = async (email: string, password: string) => {
 
   if (!user.is_verified) throw new AppError("Tài khoản chưa xác thực email", 403);
 
+  const birthdayReward = await grantBirthdayRewardOnLogin(user.id);
+  const effectivePoints = birthdayReward.granted
+    ? (birthdayReward.currentPoints ?? user.loyalty_points)
+    : user.loyalty_points;
+
   const accessToken = generateAccessToken({ userId: user.id, role: user.role });
   const refreshToken = generateRefreshToken({ userId: user.id });
 
@@ -157,8 +167,11 @@ export const login = async (email: string, password: string) => {
       email: user.email, 
       role: user.role, 
       avatarUrl: user.avatar_url, 
-      loyaltyPoints: user.loyalty_points 
-    }
+      loyaltyPoints: effectivePoints 
+    },
+    birthdayReward: birthdayReward.granted
+      ? { granted: true, points: birthdayReward.pointsGranted }
+      : null,
   };
 };
 
@@ -224,17 +237,19 @@ export const forgotPassword = async (email: string) => {
   if (!user) throw new AppError("Email không tồn tại", 404);
 
   const otpKey = `reset:${email}`;
-  const existingOtpCache = await redisClient.get(otpKey);
+  const otpResendKey = `reset:resend:${email}`;
+  const existingOtpCache = await redisClient.get(otpResendKey);
   
   if (existingOtpCache) {
-    const ttl = await redisClient.ttl(otpKey);
-    throw new AppError(`Vui lòng chờ ${ttl} giây trước khi gửi lại`, 400);
+    const ttl = await redisClient.ttl(otpResendKey);
+    return { message: `Mã OTP đã được gửi trước đó. Vui lòng chờ ${ttl} giây để gửi lại` };
   }
 
   const otp = generateOTP();
   const hashedOtp = await hashOTP(otp);
 
-  await redisClient.setEx(otpKey, parseInt(process.env.OTP_EXPIRES_MINUTES || '5') * 60, JSON.stringify({ hash: hashedOtp }));
+  await redisClient.setEx(otpKey, OTP_EXPIRES_SECONDS, JSON.stringify({ hash: hashedOtp }));
+  await redisClient.setEx(otpResendKey, OTP_RESEND_COOLDOWN_SECONDS, '1');
 
   await sendResetPasswordEmail(email, otp);
 
@@ -265,7 +280,7 @@ export const resetPassword = async (email: string, otp: string, newPassword: str
 };
 
 export const googleLogin = async (idToken: string) => {
-  const decodedToken = await verifyGoogleToken(idToken);
+  const decodedToken = await verifyFirebaseToken(idToken);
   const { email, name, picture, uid } = decodedToken;
 
   if (!email) {

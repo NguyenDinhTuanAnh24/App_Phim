@@ -4,7 +4,8 @@ import { sendBirthdayEmail } from '../services/email.service';
 
 /**
  * Birthday Cron Job
- * Chạy lúc 8:00 sáng mỗi ngày để gửi quà (100 điểm) và email chúc mừng sinh nhật cho người dùng.
+ * Chạy lúc 8:00 sáng mỗi ngày để gửi email chúc mừng sinh nhật.
+ * Điểm sinh nhật sẽ được cộng tại thời điểm user đăng nhập trong ngày sinh nhật.
  */
 cron.schedule('0 8 * * *', async () => {
   console.log('[BIRTHDAY JOB] Bắt đầu kiểm tra sinh nhật hôm nay...');
@@ -30,23 +31,7 @@ cron.schedule('0 8 * * *', async () => {
     });
 
     for (const user of birthdayUsers) {
-      // 1. Cộng 100 điểm sinh nhật
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { loyalty_points: { increment: 100 } }
-      });
-
-      // 2. Ghi log lịch sử điểm thưởng
-      await (prisma as any).loyaltyLog.create({
-        data: {
-          user_id:     user.id,
-          points:      100,
-          type:        'EARN',
-          description: '🎂 Quà tặng sinh nhật',
-        }
-      });
-
-      // 3. Gửi email chúc mừng
+      // Gửi email chúc mừng
       await sendBirthdayEmail(user).catch(err => 
         console.error(`[BIRTHDAY JOB] Lỗi gửi email cho ${user.email}:`, err.message)
       );
