@@ -134,6 +134,19 @@ npm run android
 npm run ios
 ```
 
+## Hướng dẫn sử dụng app (cho người dùng)
+
+1. Mở app và chọn **Đăng ký** nếu chưa có tài khoản.
+2. Nhập email, mật khẩu và xác thực OTP được gửi về email.
+3. Đăng nhập, sau đó có thể liên kết Google trong phần hồ sơ (tuỳ chọn).
+4. Ở trang chủ, tìm phim theo tên/thể loại hoặc xem phim đang chiếu.
+5. Chọn phim → chọn rạp/suất chiếu → chọn ghế.
+6. Chọn combo (nếu có), kiểm tra lại thông tin đơn hàng.
+7. Thanh toán qua VNPay và chờ trạng thái thành công.
+8. Sau khi đặt vé thành công, xem vé điện tử (QR) trong lịch sử vé.
+9. Tích điểm sau mỗi giao dịch, dùng điểm để đổi voucher ở mục ưu đãi.
+10. Nếu cần hỗ trợ, vào phần hỗ trợ/chăm sóc khách hàng trong app.
+
 ## Luồng quên mật khẩu
 
 1. Ở màn `Đăng nhập`, bấm **Quên mật khẩu**
