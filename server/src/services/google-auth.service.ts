@@ -1,26 +1,30 @@
-import { firebaseAdmin, isFirebaseEnabled } from '../config/firebase';
 import { prisma } from '../utils/prisma';
 import { generateAccessToken, generateRefreshToken } from '../utils/jwt.util';
 import bcrypt from 'bcryptjs';
 import { AppError } from '../utils/AppError';
 import { sendWelcomeGoogleSignupEmail } from './email.service';
 import { grantBirthdayRewardOnLogin } from './birthday-reward.service';
+import axios from 'axios';
 
 export const verifyFirebaseToken = async (idToken: string) => {
-  if (!isFirebaseEnabled || !firebaseAdmin) {
-    throw new AppError('Dịch vụ xác thực Google hiện không khả dụng. Vui lòng thử lại sau hoặc sử dụng phương thức đăng nhập khác.', 503);
-  }
-
   try {
-    const decodedToken = await firebaseAdmin.auth().verifyIdToken(idToken);
+    // Xác thực Google ID Token trực tiếp qua Google API
+    const response = await axios.get(`https://oauth2.googleapis.com/tokeninfo?id_token=${idToken}`);
+    const payload = response.data;
+
+    if (payload.error) {
+      throw new Error(payload.error_description || 'Token Google không hợp lệ');
+    }
+
     return {
-      uid: decodedToken.uid,
-      email: decodedToken.email!,
-      name: decodedToken.name || decodedToken.email?.split('@')[0] || 'User',
-      picture: decodedToken.picture || null,
+      uid: payload.sub,
+      email: payload.email!,
+      name: payload.name || payload.email?.split('@')[0] || 'User',
+      picture: payload.picture || null,
     };
-  } catch (error) {
-    throw new AppError('Token Firebase không hợp lệ hoặc đã hết hạn', 401);
+  } catch (error: any) {
+    console.error('[GOOGLE_VERIFY_ERROR]', error.response?.data || error.message);
+    throw new AppError('Xác thực tài khoản Google thất bại', 401);
   }
 };
 
